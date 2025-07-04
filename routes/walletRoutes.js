@@ -1,12 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const walletController = require('../controllers/walletController');
-const { authenticate } = require('../middleware/auth');
+const { authenticate } = require('../middlewares/authMiddleware');
 
-// Only allow authenticated users
-router.get('/:userId', authenticate, walletController.getWallet);
-router.post('/add-money', authenticate, walletController.addMoney);
-router.post('/verify-payment', authenticate, walletController.verifyPayment);
-router.post('/make-payment', authenticate, walletController.makePayment);
+// Get wallet balance
+router.get('/balance', authenticate, walletController.getWalletBalance);
+
+// Add transaction
+router.post('/add', authenticate, walletController.addTransaction);
+
+// Get transaction history
+router.get('/transactions', authenticate, walletController.getTransactionHistory);
 
 module.exports = router;

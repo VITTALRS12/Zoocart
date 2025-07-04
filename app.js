@@ -1,52 +1,81 @@
+// Load .env file
 require('dotenv').config();
+
+// Core dependencies
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
 
+// Import Routes
+const contestEntryRoutes = require('./routes/contestEntryRoutes');
+const contestRoutes = require('./routes/contestRoutes');
+const walletRoutes = require('./routes/walletRoutes'); // ✅ Wallet routes
+
+// Create Express app and HTTP server
 const app = express();
+const server = http.createServer(app);
+
+// Setup WebSocket
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:5173', // your frontend
+    credentials: true,
+  },
+});
+// Make io globally accessible in other files
+module.exports.io = io;
+
+// Load custom WebSocket logic (if you have sockets like referral updates)
+require('./sockets/referralSocket')(io);
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 
-// Database connection
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('MongoDB connected'))
-.catch(err => console.error('MongoDB connection error:', err));
-
-// Routes
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/contest', require('./routes/contestRoutes'));
-app.use('/api/referral', require('./routes/referralRoutes'));
-app.use('/api/wallet', require('./routes/walletRoutes'));
-app.use('/api/products', require('./routes/productRoutes'));
-
-// Settings endpoint
-app.get('/api/settings', (req, res) => {
-  res.send({
-    success: true,
-    data: {
-      minWalletTopup: 100,
-      maxWalletTopup: 10000,
-      referralReward: 100,
-      contestPrize: 500,
-      appVersion: '1.0.0',
-      maintenanceMode: false
-    }
+// MongoDB connection
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch((err) => {
+    console.error('❌ MongoDB connection error:', err);
+    process.exit(1);
   });
-});
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send({ success: false, message: 'Something broke!' });
+/* API Routes */
+
+// User & Auth
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/profile', require('./routes/profileRoutes'));
+
+// Referrals
+app.use('/api', require('./routes/referralRoutes'));
+
+// Wallet
+app.use('/api/wallet', walletRoutes);
+
+// Contest & Entries
+app.use('/api/contest-entries', contestEntryRoutes);
+app.use('/api/contests', contestRoutes);
+
+// Admin Panel APIs
+app.use('/api/admin/users', require('./routes/userRoutes'));
+app.use('/api/admin/orders', require('./routes/orderRoutes'));
+app.use('/api/admin/products', require('./routes/productRoutes'));
+app.use('/api/admin/dashboard', require('./routes/dashboardRoutes'));
+app.use('/api/admin/settings', require('./routes/settingRoutes'));
+
+// Health check
+app.get('/', (req, res) => {
+  res.send('API is running ✅');
 });
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

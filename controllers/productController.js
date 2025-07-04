@@ -1,90 +1,76 @@
 const Product = require('../models/Product');
 
-exports.getAllProducts = async (req, res) => {
-  try {
-    const products = await Product.find();
-    res.send({
-      success: true,
-      data: products
-    });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
-  }
-};
+// @desc    Get all products with filters, sorting, pagination
+exports.getProducts = async (req, res) => {
+  const { page = 1, limit = 12, sort = 'createdAt', order = 'desc', search = '', filters = '{}' } = req.query;
 
-exports.getProductById = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) {
-      return res.status(404).send({ success: false, message: 'Product not found' });
+  const queryFilters = JSON.parse(filters);
+  const keyword = search
+    ? { name: { $regex: search, $options: 'i' } }
+    : {};
+
+  let filterConditions = { ...keyword };
+
+  if (queryFilters.categories?.length) {
+    filterConditions.category = { $in: queryFilters.categories };
+  }
+
+  if (queryFilters.brands?.length) {
+    filterConditions.brand = { $in: queryFilters.brands };
+  }
+
+  if (queryFilters.sizes?.length) {
+    filterConditions.sizes = { $in: queryFilters.sizes };
+  }
+
+  if (queryFilters.priceRange) {
+    const { min, max } = queryFilters.priceRange;
+    if (min !== null && max !== null) {
+      filterConditions.currentPrice = { $gte: min, $lte: max };
     }
-    res.send({
-      success: true,
-      data: product
-    });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
   }
+
+  const total = await Product.countDocuments(filterConditions);
+  const products = await Product.find(filterConditions)
+    .sort({ [sort]: order === 'desc' ? -1 : 1 })
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit));
+
+  res.json({
+    products,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+    }
+  });
 };
 
+// @desc    Create new product
 exports.createProduct = async (req, res) => {
-  try {
-    const { name, description, price, image, category, stock } = req.body;
-    
-    const newProduct = new Product({
-      name,
-      description,
-      price,
-      image,
-      category,
-      stock
-    });
-
-    await newProduct.save();
-    res.send({
-      success: true,
-      message: 'Product created successfully',
-      data: newProduct
-    });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
-  }
+  const product = new Product(req.body);
+  await product.save();
+  res.status(201).json(product);
 };
 
+// @desc    Update a product
 exports.updateProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
-
-    const product = await Product.findByIdAndUpdate(id, updates, { new: true });
-    if (!product) {
-      return res.status(404).send({ success: false, message: 'Product not found' });
-    }
-
-    res.send({
-      success: true,
-      message: 'Product updated successfully',
-      data: product
-    });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
-  }
+  const updated = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  if (!updated) return res.status(404).json({ message: 'Product not found' });
+  res.json(updated);
 };
 
+// @desc    Delete a product
 exports.deleteProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
+  const deleted = await Product.findByIdAndDelete(req.params.id);
+  if (!deleted) return res.status(404).json({ message: 'Product not found' });
+  res.json({ message: 'Product deleted' });
+};
 
-    const product = await Product.findByIdAndDelete(id);
-    if (!product) {
-      return res.status(404).send({ success: false, message: 'Product not found' });
-    }
-
-    res.send({
-      success: true,
-      message: 'Product deleted successfully'
-    });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
-  }
+// @desc    Get filter options for sidebar
+exports.getFilterOptions = async (req, res) => {
+  const categories = await Product.distinct('category');
+  const brands = await Product.distinct('brand');
+  const sizes = await Product.distinct('sizes');
+  res.json({ categories, brands, sizes });
 };

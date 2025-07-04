@@ -1,107 +1,81 @@
 const Contest = require('../models/Contest');
-const User = require('../models/User');
 
-exports.getLeaderboard = async (req, res) => {
+// Create new contest (Admin)
+exports.createContest = async (req, res) => {
   try {
-    const leaderboard = await Contest.find()
-      .sort({ score: -1 })
-      .limit(10)
-      .populate('playerId', 'name email');
+    const { title, description, startDate, endDate, imageUrl, status } = req.body;
 
-    const winner = leaderboard.length > 0 ? leaderboard[0] : null;
+    if (!title || !startDate || !endDate) {
+      return res.status(400).json({ message: 'Title, startDate, and endDate are required.' });
+    }
 
-    const leaderboardWithDetails = leaderboard.map((entry, index) => ({
-      rank: index + 1,
-      playerId: entry.playerId._id,
-      playerName: entry.playerId.name || 'Unknown',
-      score: entry.score,
-      createdAt: entry.createdAt,
-    }));
-
-    res.send({ 
-      success: true, 
-      leaderboard: leaderboardWithDetails,
-      winner: winner ? {
-        name: winner.playerId.name,
-        score: winner.score
-      } : null
+    const contest = new Contest({
+      title,
+      description,
+      imageUrl,
+      startDate,
+      endDate,
+      status: status || 'active'
     });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
+
+    await contest.save();
+    res.status(201).json(contest);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error creating contest', error: error.message });
   }
 };
 
-exports.saveContestScore = async (req, res) => {
-  const { playerId, score } = req.body;
-
+// Get active contests
+exports.getActiveContests = async (req, res) => {
   try {
-    const user = await User.findById(playerId);
-    if (!user) {
-      return res.status(404).send({ success: false, message: 'User not found' });
-    }
-
-    if (user.hasPlayed) {
-      return res.status(400).send({ 
-        success: false, 
-        message: 'You can only play once.' 
-      });
-    }
-
-    if (!/^\d{12}$/.test(score)) {
-      throw new Error('Score must be exactly 12 digits (numbers only).');
-    }
-
-    const sortedScore = score
-      .split('')
-      .sort((a, b) => {
-        if (a === '0' && b !== '0') return -1;
-        if (a !== '0' && b === '0') return 1;
-        return a.localeCompare(b);
-      })
-      .join('');
-
-    const newScore = new Contest({
-      playerId,
-      score: sortedScore,
-    });
-
-    await newScore.save();
-    
-    user.hasPlayed = true;
-    await user.save();
-
-    res.send({
-      success: true,
-      message: 'Score saved successfully.',
-      formattedScore: sortedScore,
-    });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
+    const contests = await Contest.find({ status: 'active' });
+    res.json(contests);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error fetching active contests', error: error.message });
   }
 };
 
-exports.getUserStats = async (req, res) => {
+// Get completed contests
+exports.getCompletedContests = async (req, res) => {
   try {
-    const { playerId } = req.params;
+    const contests = await Contest.find({ status: 'completed' });
+    res.json(contests);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error fetching completed contests', error: error.message });
+  }
+};
 
-    const highestScore = await Contest.findOne({ playerId })
-      .sort({ score: -1 })
-      .limit(1);
+// Update contest (Admin)
+exports.updateContest = async (req, res) => {
+  try {
+    const updated = await Contest.findByIdAndUpdate(req.params.id, req.body, { new: true });
 
-    const allScores = await Contest.find().sort({ score: -1 });
-    const userRank = allScores.findIndex(entry => entry.playerId.toString() === playerId) + 1;
+    if (!updated) {
+      return res.status(404).json({ message: 'Contest not found' });
+    }
 
-    const attempts = await Contest.countDocuments({ playerId });
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error updating contest', error: error.message });
+  }
+};
 
-    res.send({
-      success: true,
-      stats: {
-        highestScore: highestScore ? highestScore.score : null,
-        rank: userRank > 0 ? userRank : null,
-        attempts
-      }
-    });
-  } catch (err) {
-    res.status(400).send({ success: false, message: err.message });
+// Delete contest (Admin)
+exports.deleteContest = async (req, res) => {
+  try {
+    const deleted = await Contest.findByIdAndDelete(req.params.id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: 'Contest not found' });
+    }
+
+    res.json({ message: 'Contest deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error deleting contest', error: error.message });
   }
 };

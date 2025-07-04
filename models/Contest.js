@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
 
 const contestSchema = new mongoose.Schema({
-  playerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  score: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now }
-});
+  title: { type: String, required: true },
+  description: String,
+  imageUrl: String,
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+  status: { type: String, enum: ['active', 'completed'], default: 'active' }
+}, { timestamps: true });
 
 module.exports = mongoose.model('Contest', contestSchema);

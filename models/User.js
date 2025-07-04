@@ -1,28 +1,68 @@
 const mongoose = require('mongoose');
-const crypto = require('crypto');
 
-const userSchema = new mongoose.Schema({
-  uid: { type: String, unique: true },
-  name: String,
-  email: { type: String, unique: true },
-  phone: String,
-  passwordHash: String,
-  status: { type: String, default: 'active' },
-  referralCode: { type: String, unique: true },
-  referredBy: { type: String, default: null },
-  hasPlayed: { type: Boolean, default: false },
-  role: { type: String, default: 'user' },
-  createdAt: { type: Date, default: Date.now },
-});
+// Address subdocument schema
+const addressSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    addressLine1: { type: String, required: true },
+    addressLine2: { type: String },
+    city: { type: String, required: true },
+    state: { type: String, required: true },
+    pincode: { type: String, required: true },
+    country: { type: String, required: true },
+    isDefault: { type: Boolean, default: false },
+  },
+  { _id: true } // Important for update/delete
+);
 
-userSchema.pre('save', function (next) {
-  if (!this.uid) {
-    this.uid = `U${Math.floor(10000 + Math.random() * 90000)}`;
-  }
-  if (!this.referralCode) {
-    this.referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
-  }
-  next();
-});
+const userSchema = new mongoose.Schema(
+  {
+    uid: { type: String, unique: true },
+    name: { type: String, required: true },
+    email: { type: String, unique: true, required: true },
+    phone: { type: String },
 
-module.exports = mongoose.model('User', userSchema);
+    passwordHash: { type: String, required: true },
+
+    avatar: { type: String, default: "" }, // same as profilePhoto in controller
+
+    dateOfBirth: { type: Date },
+    gender: {
+      type: String,
+      enum: ["male", "female", "other", ""],
+      default: ""
+    },
+
+    status: {
+      type: String,
+      enum: ["verified", "unverified", "banned"],
+      default: "unverified"
+    },
+
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user"
+    },
+
+    walletBalance: { type: Number, default: 0 },
+
+    referralCode: { type: String, unique: true },
+    referredBy: { type: String, default: null },
+    totalReferrals: { type: Number, default: 0 },
+
+    contestsPlayed: { type: Number, default: 0 },
+    contestsWon: { type: Number, default: 0 },
+    totalOrders: { type: Number, default: 0 },
+
+    tokens: [{ type: String }],
+    isPaidUser: { type: Boolean, default: false },
+    joinDate: { type: Date, default: Date.now },
+
+    // Addresses array
+    addresses: [addressSchema]
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("User", userSchema);
